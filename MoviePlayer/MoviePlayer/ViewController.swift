@@ -10,83 +10,109 @@ import UIKit
 import AVFoundation
 
 class ViewController: UIViewController {
-    
-    var player: AVPlayer?
-    var item: AVPlayerItem?
-    var playLayer: AVPlayerLayer?
-    
+
+    var play: PlayManager?
     var slider: UISlider?
-    var isreadToPlay: Bool?
+    var timer: Timer?
     
     
 
+
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        //networkVideoPlay(urlString: "http://bos.nj.bpc.baidu.com/tieba-smallvideo/11772_3c435014fb2dd9a5fd56a57cc369f6a0.mp4")
+        addPlayButton()
+        addSuspendedButton()
         
-        let file = NSSearchPathForDirectoriesInDomains(FileManager.SearchPathDirectory.documentDirectory, FileManager.SearchPathDomainMask.userDomainMask, true).first
-        let fileName = file! + "/6a0.mp4"
-        localVideoPlay(filePath: fileName)
+//        let file = NSSearchPathForDirectoriesInDomains(FileManager.SearchPathDirectory.documentDirectory, FileManager.SearchPathDomainMask.userDomainMask, true).first
+//        let fileName = file! + "/6a0.mp4"
+//        localVideoPlay(filePath: fileName)
+//        addPlayButton()
         
+        play = PlayManager()
+        play?.viewController = self
+//        play.playVideo(filepath: fileName)
+        play?.playVideo(urlString: "http://bos.nj.bpc.baidu.com/tieba-smallvideo/11772_3c435014fb2dd9a5fd56a57cc369f6a0.mp4")
+        
+        slider = UISlider(frame: CGRect(x: 0, y: 55, width: self.view.frame.width, height: 30))
+        slider?.addTarget(self, action: #selector(sliderAction), for: .touchUpInside)
+        self.view.addSubview(slider!)
+        
+        //添加循环,观察视频播放进度
+        timer = Timer.init(timeInterval: 1.0, repeats: true) { (timer) in
+            let t = self.play?.player?.currentTime()
+            let tt = (t?.value)! / Int64((t?.timescale)!)
+            print("\(tt)")
+            self.slider?.value = Float(tt)
+        }
+        RunLoop.current.add(timer!, forMode: .commonModes)
         
     }
     
-    //1, 网络视频播放
-    func networkVideoPlay(urlString path: String) {
-        let pathString = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-        let url = URL(string: pathString!)
-        item = AVPlayerItem(url: url!)
-        
-        player = AVPlayer(playerItem: item!)
-        playLayer = AVPlayerLayer(player: player!)
-        playLayer?.frame = self.view.bounds
-        self.view.layer.addSublayer(playLayer!)
-        player?.play()
+    func addPlayButton() {
+        let button = UIButton(type: .custom)
+        button.frame = CGRect(x: 250, y: 600, width: 100, height: 100)
+        button.backgroundColor = .red
+        button.setTitle("播放", for: .normal)
+        button.addTarget(self, action: #selector(playAction(sender:)), for: .touchUpInside)
+        self.view.addSubview(button)
     }
     
-    //2, 本地视频播放
-    func localVideoPlay(filePath path: String) {
-        let pathString = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-        let url = URL(fileURLWithPath: pathString!)
-        item = AVPlayerItem(url: url)
-        player = AVPlayer(playerItem: item)
-        playLayer = AVPlayerLayer(player: player)
-        playLayer?.frame = self.view.bounds
-        self.view.layer.addSublayer(playLayer!)
-        player?.play()
-        
-        //添加监听
-        item?.addObserver(self, forKeyPath: "status", options: NSKeyValueObservingOptions.new, context: nil)
+    func addSuspendedButton() {
+        let button = UIButton(type: .custom)
+        button.frame = CGRect(x: 150, y: 600, width: 100, height: 100)
+        button.backgroundColor = .red
+        button.setTitle("暂停", for: .normal)
+        button.addTarget(self, action: #selector(suspendedAction(sender:)), for: .touchUpInside)
+        self.view.addSubview(button)
     }
     
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        if keyPath == "status" {
-            let status = (change![NSKeyValueChangeKey.newKey])!
-            switch status {
-            case AVPlayerItemStatus.failed:
-                //失败
-                print("加载失败")
+    @objc func playAction(sender: UIButton) {
 
-            case AVPlayerItemStatus.readyToPlay:
-                //失败
-                print("准备播放")
-
-            case AVPlayerItemStatus.unknown:
-                //失败
-                print("状态未知")
-
-            default:
-                print("hh")
-            }
+        playPlay()
+    }
+    
+    @objc func suspendedAction(sender: UIButton) {
+        if sender.currentTitle == "暂停" {
+            sender.setTitle("继续", for: .normal)
+            play?.player?.pause()
+        } else {
+            sender.setTitle("暂停", for: .normal)
+            play?.player?.play()
+        }
+    }
+    
+    func playPlay() {
+        if play?.isreadToPlay != nil && (play?.isreadToPlay)! {
+            play?.player?.play()
+            let timeValue = Float((play?.player?.currentItem?.duration.value)! / Int64((play?.player?.currentItem?.duration.timescale)!))
+            
+            slider?.maximumValue = timeValue
+            
+        } else {
+            print("视频正在加载...")
         }
     }
 
+    @objc func sliderAction() {
+        let seconds = self.slider?.value
+        let startTime = CMTimeMakeWithSeconds(Float64(seconds!), (play?.player?.currentItem?.duration.timescale)!)
+        play?.player?.seek(to: startTime, completionHandler: { (completion) in
+            //完成,重新播放
+            self.playPlay()
+        })
+        
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
+        
     }
 
-
+    deinit {
+        timer?.invalidate()
+        timer = nil
+    }
 }
 
